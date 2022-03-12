@@ -1,0 +1,207 @@
+
+# For the PersistentVolumeC MYSQL @TEST
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-test-claim
+  namespace: test
+  labels:
+    tier: test
+    app: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
+---
+
+# For the PersistentVolumeC MYSQL @PRODUCTION
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-prod-claim
+  namespace: production
+  labels:
+    tier: production
+    app: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
+---
+
+
+
+
+
+
+# Deployment MYSQL @TEST
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  namespace: test
+  labels:
+    tier: test
+    app: mysql
+spec: 
+  selector:
+    matchLabels:
+      tier: test
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        tier: test
+        app: mysql
+    spec:
+      nodeSelector:
+        tier: test
+      containers:
+      - name: mysql-test
+        image: mysql:5.6
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_DATABASE      
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "250m"
+        ports:
+          - containerPort: 3306
+            name: mysql-test-port
+        volumeMounts:
+          - name: mysql-test-pv
+            mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-test-pv
+          persistentVolumeClaim:
+            claimName: mysql-test-claim
+---
+# Deployment MYSQL @PRODUCTION
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  namespace: production
+  labels:
+    tier: production
+    app: mysql
+spec:
+  selector:
+    matchLabels:
+      tier: production
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        tier: production
+        app: mysql
+    spec:
+      containers:
+      - name: mysql-prod
+        image: mysql:5.6
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_DATABASE      
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "250m"
+        ports:
+          - containerPort: 3306
+            name: mysql-prod-port
+        volumeMounts:
+          - name: mysql-prod-pv
+            mountPath: /var/lib/mysql
+      nodeSelector:
+        tier: production
+      tolerations:
+      - key: "tier"
+        operator: "Equal"
+        value: "production"
+        effect: "NoSchedule"
+      volumes:
+        - name: mysql-prod-pv
+          persistentVolumeClaim:
+            claimName: mysql-prod-claim
+---
+# SERVICE MYSQL @TEST
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-test-svc
+  namespace: test
+  labels:
+    tier: test
+spec:
+  selector:
+    tier: test
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+
+# SERVICE MYSQL @PRODUCTION
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-prod-svc
+  namespace: production
+  labels:
+    tier: production
+spec:
+  selector:
+    tier: production
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306

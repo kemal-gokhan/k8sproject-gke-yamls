@@ -1,0 +1,288 @@
+#For the PersistentVolume WORDPRESS @TEST
+apiVersion: v1
+kind: PersistentVolumeClaim # Volume Claim, if you are at public cloud, you dont need to create PV.
+metadata:
+  name: wp-test-claim
+  namespace: test #namespace critic
+  labels:
+    tier: test
+    app: wordpress
+spec:
+  accessModes: 
+    - ReadWriteOnce #accessModes critic
+  volumeMode: Filesystem # 2 type of volume mode
+  resources:
+    requests:
+      storage: 5Gi
+---
+#For the PersistentVolume WORDPRESS @PROD
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wp-prod-claim
+  namespace: production
+  labels:
+    tier: production
+    app: wordpress
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
+---
+
+
+
+
+# Deployment WORDPRESS @TEST
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wp-deployment
+  namespace: test
+  labels:
+    tier: test
+    app: wordpress
+spec:
+  selector:
+    matchLabels:
+      tier: test
+      app: wordpress
+  strategy:
+    type: Recreate #recreate strategy "All existing Pods are killed before new ones are created"
+  template:
+    metadata:
+      labels:
+        tier: test
+        app: wordpress
+    spec:
+      nodeSelector:
+        tier: test
+      containers:
+      - image: wordpress:5.6
+        name: wp-test
+        env: #env critic
+        - name: WORDPRESS_DB_HOST
+          value: mysql-test-svc
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_USER
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_PASSWORD
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-test-secret
+              key: MYSQL_DATABASE
+        resources: #res critic
+          limits:
+            memory: "1Gi"
+            cpu: "250m"
+        ports:
+        - containerPort: 80
+          name: wp-test-port
+        volumeMounts:
+        - name: wp-test-pv
+          mountPath: /var/www/html
+      volumes:
+      - name: wp-test-pv
+        persistentVolumeClaim:
+          claimName: wp-test-claim
+
+
+# Deployment WORDPRESS @PRODUCTION
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wp-deployment
+  namespace: production
+  labels:
+    tier: production
+    app: wordpress
+spec:
+  selector:
+    matchLabels:
+      tier: production
+      app: wordpress
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        tier: production
+        app: wordpress
+    spec:
+      containers:
+      - image: wordpress:5.6
+        name: wp-prod
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: mysql-prod-svc
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_USER
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_PASSWORD
+        - name: WORDPRESS_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-prod-secret
+              key: MYSQL_DATABASE
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "250m"
+        ports:
+        - containerPort: 80
+          name: wp-prod-port
+        volumeMounts:
+        - name: wp-prod-pv
+          mountPath: /var/www/html
+      nodeSelector:
+        tier: production
+      tolerations:
+      - key: "tier"
+        operator: "Equal"
+        value: "production"
+        effect: "NoSchedule"
+      volumes:
+      - name: wp-prod-pv
+        persistentVolumeClaim:
+          claimName: wp-prod-claim
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - mysql
+            topologyKey: kubernetes.io/hostname
+---
+
+# SERVICE WORDPRESS @TEST
+apiVersion: v1
+kind: Service
+metadata:
+  name: wp-test-svc
+  namespace: test
+  labels:
+    tier: test
+    app: wordpress
+spec:
+  selector:
+    tier: test
+    app: wordpress
+  ports:
+  - port: 80
+    targetPort: 80 #dont forget from external nodeport->port->target-port https://i.stack.imgur.com/2bVEz.png
+---
+
+
+# SERVICE WORDPRESS @PRODUCTION
+apiVersion: v1
+kind: Service
+metadata:
+  name: wp-prod-svc
+  namespace: production
+  labels:
+    tier: production
+    app: wordpress
+spec:
+  selector:
+    tier: production
+    app: wordpress
+  ports:
+  - port: 80
+    targetPort: 80
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# test work
+
+
+
+
+
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: wordpress-deployment
+#   labels:
+#     app: tier=front
+# spec:
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: wordpress
+#   template:
+#     metadata:
+#       labels:
+#         app: wordpress
+#     spec:
+#       containers:
+#       - name: wordpress
+#         image: wordpress:latest
+#         ports:
+#         - containerPort: 3306
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: BackendMysql
+# spec:
+#   type: ClusterIP
+#   ports:
+#     - targetPort: 3306
+#       port: 3306
+    
